@@ -1,0 +1,15 @@
+Ordering of values is based on a standard order of AAs: 
+Ala	Arg	Asn	Asp	Cys	Gln	Glu	Gly	His	Ile	Leu	Lys	Met	Phe	Pro	Ser	Thr	Trp	Tyr	Val
+
+Here is how the format works, considering just the first 5 aas:  A   R   N   D   C
+
+First, generally only the lower triangle is given, like this where D_xy is the distance between AA x and AA y: 
+
+D_RA
+D_NA	D_NR
+D_DA	D_DR	D_DN
+D_CA	D_CR	D_CN	D_CD
+
+So, the rows are aas[2:n], and the columns are aas[1:n-1]. 
+
+Notice that the first row of D_Ay is missing, because all the values are present in the first column, which has D_xA.  Likewise, we don't need a column for aas[n] because all the values are present in the last row.

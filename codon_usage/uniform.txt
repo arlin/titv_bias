@@ -1,0 +1,81 @@
+AmAcid  Codon      Number    /1.00     Fraction   ..
+ 
+Gly     GGG     1.00      1.00      1.00
+Gly     GGA     1.00     1.00      1.00
+Gly     GGT    1.00     1.00      1.00
+Gly     GGC     1.00      1.00      1.00
+ 
+Glu     GAG    1.00     1.00      1.00
+Glu     GAA    1.00     1.00      1.00
+Asp     GAT    1.00     1.00      1.00
+Asp     GAC    1.00     1.00      1.00
+ 
+Val     GTG     1.00     1.00      1.00
+Val     GTA     1.00     1.00      1.00
+Val     GTT    1.00     1.00      1.00
+Val     GTC     1.00     1.00      1.00
+ 
+Ala     GCG     1.00      1.00      1.00
+Ala     GCA    1.00     1.00      1.00
+Ala     GCT    1.00     1.00      1.00
+Ala     GCC     1.00     1.00      1.00
+ 
+Arg     AGG     1.00      1.00      1.00
+Arg     AGA    1.00     1.00      1.00
+Ser     AGT     1.00     1.00      1.00
+Ser     AGC     1.00      1.00      1.00
+ 
+Lys     AAG    1.00     1.00      1.00
+Lys     AAA    1.00     1.00      1.00
+Asn     AAT    1.00     1.00      1.00
+Asn     AAC    1.00     1.00      1.00
+ 
+Met     ATG    1.00     1.00      1.00
+Ile     ATA    1.00     1.00      1.00
+Ile     ATT    1.00     1.00      1.00
+Ile     ATC    1.00     1.00      1.00
+ 
+Thr     ACG     1.00      1.00      1.00
+Thr     ACA    1.00     1.00      1.00
+Thr     ACT    1.00     1.00      1.00
+Thr     ACC     1.00     1.00      1.00
+ 
+Trp     TGG     1.00     1.00      1.00
+End     TGA      1.00      1.00      1.00
+Cys     TGT     1.00      1.00      1.00
+Cys     TGC     1.00      1.00      1.00
+ 
+End     TAG      1.00      1.00      1.00
+End     TAA      1.00      1.00      1.00
+Tyr     TAT    1.00     1.00      1.00
+Tyr     TAC     1.00     1.00      1.00
+ 
+Leu     TTG    1.00     1.00      1.00
+Leu     TTA    1.00     1.00      1.00
+Phe     TTT    1.00     1.00      1.00
+Phe     TTC    1.00     1.00      1.00
+ 
+Ser     TCG     1.00      1.00      1.00
+Ser     TCA    1.00     1.00      1.00
+Ser     TCT    1.00     1.00      1.00
+Ser     TCC     1.00     1.00      1.00
+ 
+Arg     CGG     1.00      1.00      1.00
+Arg     CGA     1.00      1.00      1.00
+Arg     CGT     1.00      1.00      1.00
+Arg     CGC     1.00      1.00      1.00
+ 
+Gln     CAG     1.00     1.00      1.00
+Gln     CAA    1.00     1.00      1.00
+His     CAT     1.00     1.00      1.00
+His     CAC     1.00      1.00      1.00
+ 
+Leu     CTG     1.00     1.00      1.00
+Leu     CTA     1.00     1.00      1.00
+Leu     CTT     1.00     1.00      1.00
+Leu     CTC     1.00      1.00      1.00
+ 
+Pro     CCG     1.00      1.00      1.00
+Pro     CCA    1.00     1.00      1.00
+Pro     CCT     1.00     1.00      1.00
+Pro     CCC     1.00      1.00      1.00

@@ -1,0 +1,428 @@
+== reading matrices ==
+
+This is the document for working out technical issues. 
+
+I got bogged down on this for a long time, so I'm collecting this stuff all in one place to solve the problems.  
+
+There are several sources of difficulty.  
+
+1. different formats.  Most are using PAML.  This is an ad hoc format, not very flexible. 
+2. different matrix shapes, square or tri-with-diag or tri-without-diag
+3. problems with parsing and type-casting in R.
+4. difficulty of creating upper tri from lower
+
+I'm going to solve these one at a time.  First I'm going to solve all of the problems with one matrix such as EX or U, and then I'm going to go back and make it work for everything.  
+
+=== formats ===
+
+Most are using PAML.  Ordering of values is based on a standard order of AAs: 
+Ala	Arg	Asn	Asp	Cys	Gln	Glu	Gly	His	Ile	Leu	Lys	Met	Phe	Pro	Ser	Thr	Trp	Tyr	Val
+
+Here is how the format works, considering just the first 5 aas:  A   R   N   D   C
+
+First, generally only the lower triangle is given, like this where D_xy is the distance between AA x and AA y: 
+
+D_RA
+D_NA	D_NR
+D_DA	D_DR	D_DN
+D_CA	D_CR	D_CN	D_CD
+
+So, the rows are aas[2:n], and the columns are aas[1:n-1]. 
+
+Notice that the first row of D_Ay is missing, because all the values are present in the first column, which has D_xA.  Likewise, we don't need a column for aas[n] because all the values are present in the last row.
+
+=== different shapes ===
+
+Square matrix is easy to understand.  The problem is with the triangles.  
+
+For 20 amino acids, the total number of distance values in the triangle is 190.  The way to think about this is that if we filled in half of the diagonal with 10 values, the result would be half of a square matrix with 400 values; conversely, half a square minus half of a diagonal = 190.  
+
+A lower triangle matrix with no diag for 5 types has 10 elements; with a diagonal,
+it has 15 elements; square matrix has 25 elements. 
+
+In general, 
+* dim of square = square root of number of elements
+* dim of tri with diag = ( sqrt(8 * elements + 1) - 1 )/2
+** e.g., 8 * 15 + 1 = 121, sqrt(121) - 1 = 10, divide by 2 = 5
+* a triangle of dimension n without a diagonal has the same number of elements as a triangle of dimension n - 1 with the diagonal. 
+** So, use the above formula, then add 1, e.g., 8 * 10 + 1 = 81, sqrt(81) - 1 = 8, divide by 2 = 4, add 1 = 5
+
+Got the basic formula from here: 
+
+http://stackoverflow.com/questions/13863569/reading-a-symmetric-matrix-from-file-that-omits-upper-triangular-part
+
+Curious, but I can't figure how that was derived.  There must be a simple algebraic proof but I can't figure what it is.  
+
+=== parsing in R to get a matrix ===
+
+# https://stat.ethz.ch/pipermail/r-help/2008-April/159077.html
+# warn = false turns off the warning that often happens if the file does not end with a cr or something
+
+aa_names <- strsplit("ARNDCQEGHILKMFPSTWYV",NULL)[[1]]
+
+# ex
+start <- ex$file.header.lines + 1
+end <- start + 19
+dat <- readLines("aa_matrices/ex.dat", warn=FALSE)[start:end]
+ex <- read.table(textConnection(dat), fill=T,col.names=aa_names)
+rownames(ex) <- aa_names
+
+# lg 
+start <- lg$file.header.lines + 1
+end <- start + 18
+dat <- readLines(lg$file, warn=FALSE)[start:end]
+lg <- read.table(textConnection(dat), fill=T,col.names=aa_names[1:19])
+rownames(lg) <- aa_names[2:20]
+
+the latter gives a table of the form 
+         A        R    ...	W	Y
+R 0.425093       NA    ...	NA	NA
+N 0.276818 0.751878    ...	NA	NA
+...
+V  ...  					0.189510 0.249313
+
+# furthermore, I can address these tables using the AA code indexes, and they are treated like numbers: 
+> ex["W", "P"]
+[1] 0.065936
+> lg["W", "P"]
+[1] 0.095131
+> ex["W", "P"] + 1
+[1] 1.065936
+
+=== type-casting to a matrix of floats ===
+
+Unfortunately, right now I'm getting a list.  That is, the output of the read_aa_matrix function is giving me a list of nrows items, each of which is a vector of ncols numbers (or NAs). 
+
+> ex$mat <- read_aa_matrix(ex)
+> ex$mat[[2]][3]
+[1] 0.251932
+
+OK, so now I figured this one out.  The square and triangle matrices are all represented as square lists of vectors (# vectors = # items in each vector), some with NA in the upper tri.  So this is easy to convert to a square matrix: 
+
+  dat <- matrix(unlist(dat),ncol=desired.ncol)
+
+Now, I built this into the "read" function and I'm outputting matrices now!  woo hoo.  
+
+=== flattening ===
+
+Now, if I need to flatten these, it is very easy: 
+
+ex$mat <- read_aa_matrix(ex)
+as.data.frame(as.table(ex$mat))
+    Var1 Var2     Freq
+1      A    A       NA
+2      R    A 0.458571
+3      N    A 0.399547
+4      D    A 0.292990
+5      C    A 0.333597
+6      Q    A 0.499125
+7      E    A 0.519857
+8      G    A 0.368935
+. . . 
+
+=== merging with mut_type via AA paths ===
+
+Now, for resampling I want to avoid drawing NA values from the diagonal or the upper tri of a matrix read from a symmetric measure, because those are irrelevant. 
+
+Also, I can speed up sampling by focusing only on the singlet exchanges.  All square matrices have values (no NA) for the singlet exchanges, and all triangle matrices have values for either forward or reverse of each exchange.  
+
+So, for both reasons, the thing to do is to create efficient versions of each measure that have only the singlet values.  This would be easy to do as a data frame or table. Each column is a different measure, each row is a different pair.  
+
+We have to decide on the fixed order, and how to represent unordered pairs.  The fixed order will be an alpha sort.  The rule for unordered pairs is that S <--> T is represented by "ST" because this is alphabetically prior to "TS".  
+
+# step 1
+source("titv_functions.R")
+paths <- compute_aa_paths()
+unordered_paths <- paths[!duplicated(paths[,4]),]
+dim(unordered_paths)
+[1] 75  4
+
+# step 2
+# btw, don't call paste with a vector in the first argument, expecting it to paste 
+# together the items in the vector.  Give paste item1, item2, . . 
+#
+tangs_u$mat <- read_aa_matrix(tangs_u)
+tmp <- as.data.frame(as.table(tangs_u$mat))
+tmp <- cbind(apply(tmp,1,function(x){paste(x[1],x[2],sep='')}),tmp[,3])
+
+# step 3 
+# merge
+# this is getting close but its not working exactly like i expected. 
+merge(tmp,unordered_paths,by.x=1,by.y=4)
+
+   V1    V2 from_Aa to_Aa mut_Type
+1  CF  <NA>       F     C       tv
+2  CG  <NA>       C     G       tv
+3  CR 0.382       C     R       ti
+4  CS  <NA>       C     S       tv
+5  CW  <NA>       C     W       tv
+. . . 
+
+I'm getting 61 rows and most of them are NA values.  I want 75 and they all should be populated.  What's happening here is that tmp currently has ordered names while the codon paths are unordered.  To take the first example above: 
+
+> tmp[tmp[,1]=="CF",]
+[1] "CF" NA  
+> tmp[tmp[,1]=="FC",]
+[1] "FC"    "0.321"
+
+That is, tmp has the value for CF stored under FC.  
+
+# revised step #2
+tmp <- as.data.frame(as.table(tangs_u$mat))
+tmp <- cbind(apply(tmp,1,function(x){a<-sort(c(x[1],x[2]));paste(a[1],a[2],sep='')}),tmp[,3])
+tmp <- tmp[!is.na(tmp[,2]),]
+
+# repeat step #3
+weighted_paths <- merge(tmp,unordered_paths,by.x=1,by.y=4)[,c(1,2,5)]
+weighted_paths
+1  AD 0.657       tv
+2  AE 0.906       tv
+3  AG 1.379       tv
+4  AP 1.288       tv
+
+now its working.  from here, calculating the stats for ti, tv or ambig is a simple matter. 
+
+dat <- data.frame("weight"=as.numeric(wp$weight),"group"=factor(wp$mut_type))
+aggregate(weight ~ group, data=dat, FUN = function(x) c(M=mean(x), SD=sd(x)))
+  group weight.M weight.SD
+1 ambig 21.50000  14.24781
+2    ti 36.18182  18.53603
+3    tv 32.87755  20.04852
+
+that was for a triangle with only singlets.  the same thing works for a triangle 
+with doublets and triplets. now I need to go back and do a square matrix like ex. 
+
+So, here is the protocol: 
+# step 1
+source("titv_functions.R")
+paths <- compute_aa_paths()
+unordered_paths <- paths[!duplicated(paths[,4]),]
+
+# step 2
+# btw, don't call paste with a vector in the first argument, expecting it to paste 
+# together the items in the vector.  Give paste item1, item2, . . 
+source("aa_matrices_metadata.R")
+tangs_u$mat <- read_aa_matrix(tangs_u)
+tmp <- as.data.frame(as.table(tangs_u$mat))
+# this step turns my numbers into chars, which later get turned into factors!
+tmp <- cbind(apply(tmp,1,function(x){a<-sort(c(x[1],x[2]));paste(a[1],a[2],sep='')}),tmp[,3])
+tmp <- tmp[!is.na(tmp[,2]),]
+
+# step 3
+tmp <- merge(tmp,unordered_paths,by.x=1,by.y=4)[,c(1,2,5)]
+dat <- data.frame("weight"=as.numeric(as.character(tmp[,2])),"group"=factor(tmp[,3]))
+aggregate(weight ~ group, data=dat, FUN = function(x) c(M=mean(x), SD=sd(x)))
+
+repeated this for each of the triangles I had available. 
+
+all <- list(exs,miyata,grantham,lg, tangs_u)
+lapply(all,function(x){ c(x$name, x$out)})
+
+lapply(all,function(x){ c(x$name, (x$out)$weight)})
+[[1]]
+[1] "EXS"                "0.24575"            "0.295427272727273"  "0.275655102040816"  "0.120465499902116"  "0.0897943745285288"
+[7] "0.0880380458978401"
+
+[[2]]
+[1] "Miyata"            "1.805"             "1.68772727272727"  "2.05"              "1.5983011814632"   "0.957605803271301" "1.15680414648865" 
+
+[[3]]
+[1] "Grantham"         "64.5"             "79.1818181818182" "93.1836734693878" "57.0642912278189" "50.2694040845223" "51.1067809710658"
+
+[[4]]
+[1] "LG"               "1.9625245"        "2.4915245"        "1.63119089795918" "1.83342830168194" "2.49988129422858" "1.97306018993476"
+
+[[5]]
+[1] "U"                 "0.589"             "0.982545454545454" "0.912734693877551" "0.249261576127034" "0.559654121695477" "0.568771035343976"
+
+=== now lets do codon paths! ===
+
+# get codon paths, add the code for from_AA to to_Aa (e.g., "YS")
+paths <- compute_codon_paths()
+unordered_Pair <- apply(paths,1,function(x,y){a<-sort(c(x["from_Aa"],x["to_Aa"]));paste(a[1],a[2],sep='')})
+paths <- cbind(paths,unordered_Pair)
+
+# here "tmp" has the Aa pair code followed by the weight
+weighted <- merge(tmp[,1:2],paths, by.x=1,by.y=9)
+weighted[1:5,]
+  V1   V2 paths[, 1] from_Aa codon_Pos from_Nt mut_Type to_Nt to_Codon to_Aa
+1 AD 2.37        GCC       A         2       C    tv_WS     A      GAC     D
+2 AD 2.37        GAT       D         2       A    tv_WS     C      GCT     A
+3 AD 2.37        GCT       A         2       C    tv_WS     A      GAT     D
+4 AD 2.37        GAC       D         2       A    tv_WS     C      GCC     A
+5 AE 2.46        GAA       E         2       A    tv_WS     C      GCA     A
+
+# now reduce the mut_Type to just ti and tv, and we have our answer 
+weighted[weighted[,'mut_Type']!='ti','mut_Type'] <- 'tv'
+dat <- data.frame("weight"=as.numeric(as.character(weighted[,2])),"group"=factor(weighted[,7]))
+aggregate(weight ~ group, data=dat, FUN = function(x) {M=mean(x)})
+  group   weight
+1    ti 1.693448
+2    tv 1.804710
+
+Success!
+
+=== now lets do codon frequency weighting ===
+
+human codon usage downloaded from CUTG database. save in file, put metadata into a separate file (same strategy as for aa matrices). 
+
+colnames <- c("AmAcid","Codon","Number","/1000","Fraction")
+cu <- read.table(file="codon_usage/homo_sapiens.txt",blank.lines.skip = TRUE,skip=1,col.names=colnames)
+cu[,5] <- cu[,3]/sum(cu[,3])
+cu <- cu[,c(2,5)]
+
+# paths 
+paths <- compute_codon_paths()
+pruned <- paths[paths[,'from_Aa']!=paths[,'to_Aa'] & paths[,'to_Aa'] != '*' & paths[,'from_Aa'] != '*',]
+pruned[pruned[,'mut_Type']!='ti','mut_Type'] <- 'tv'
+colnames(pruned)[1] <- "from_Codon"
+Replacement <- apply(pruned,1,function(x,y){a<-sort(c(x["from_Aa"],x["to_Aa"]));paste(a[1],a[2],sep='')})
+pruned <- cbind(pruned,Replacement)
+
+# now we are ready to merge, then simplify a bit 
+combo <- merge(pruned,cu, by.x="from_Codon",by.y="Codon")
+combo <- combo[,c(1,2,3,5,6,9,11)]
+combo[1:5,]
+  from_Codon from_Aa codon_Pos mut_Type to_Nt Replacement       freq
+1        AAA       K         2       tv     T          IK 0.02451754
+2        AAA       K         1       ti     G          EK 0.02451754
+3        AAA       K         3       tv     T          KN 0.02451754
+4        AAA       K         3       tv     C          KN 0.02451754
+5        AAA       K         2       ti     G          KR 0.02451754
+
+# now merge with "tmp" which has a replacement weight matrix
+combo <- merge(combo,tmp[,1:2], by.x="Replacement",by.y=1)
+combo[1:5,]
+  Replacement from_Codon from_Aa codon_Pos mut_Type to_Nt       freq   V2
+1          AD        GCC       A         2       tv     A 0.02782541 2.37
+2          AD        GCT       A         2       tv     A 0.01850857 2.37
+3          AD        GAC       D         2       tv     C 0.02518312 2.37
+4          AD        GAT       D         2       tv     C 0.02184791 2.37
+5          AE        GAG       E         2       tv     C 0.03972603 2.46
+
+# now do some analysis
+# first, just weight codon paths by codon frequency and group by ti or tv
+# the lack of relevance of weighting is shown by the similar means
+data.frame("weight"=as.numeric(as.character(combo[,"freq"])),"group"=factor(combo[,"mut_Type"]))
+aggregate(weight ~ group, data=dat, FUN = function(x) {c(Mean=mean(x),Sum=sum(x))})
+  group weight.Mean weight.Sum
+1    ti  0.01634377 1.89587694
+2    tv  0.01691786 4.66932911
+
+# second, let's weight by replacement weight and group by ti or tv 
+dat <- data.frame("weight"=as.numeric(as.character(combo[,8])),"group"=factor(combo[,"mut_Type"]))
+aggregate(weight ~ group, data=dat, FUN = function(x) {c(Mean=mean(x),Sum=sum(x))})
+  group weight.Mean weight.Sum
+1    ti    1.693448 196.440000
+2    tv    1.804710 498.100000
+
+# third, let's combine codon use and replacement weight, then group by ti or tv
+colnames(combo)[8] <- "Repl_cost"
+combo[,8] <- as.numeric(as.character(combo[,8]))
+combo <- cbind(combo,combo[,8]*combo[,7])
+colnames(combo)[9] <- "combined"
+combo[1:5,]
+  Replacement from_Codon from_Aa codon_Pos mut_Type to_Nt       freq Repl_cost   combined
+1          AD        GCC       A         2       tv     A 0.02782541      2.37 0.06594622
+2          AD        GCT       A         2       tv     A 0.01850857      2.37 0.04386532
+3          AD        GAC       D         2       tv     C 0.02518312      2.37 0.05968399
+4          AD        GAT       D         2       tv     C 0.02184791      2.37 0.05177954
+5          AE        GAG       E         2       tv     C 0.03972603      2.46 0.09772604
+
+aggregate( combined ~ mut_Type, data=combo, FUN=function(x) {c(Mean=mean(x),Sum=sum(x))})
+  mut_Type combined.Mean combined.Sum
+1       ti    0.02704611   3.13734905
+2       tv    0.02966189   8.18668141
+
+=== testing codon use values for correct read ===
+
+# this could be simplified.  no need to generate freqs and rearrange
+# can just use col 2 (codon) and col 3 (number) 
+
+# step 1: read file using my R method 
+colnames <- c("AmAcid","Codon","Number","/1000","Fraction")
+cu <- read.table(file="codon_usage/homo_sapiens.txt",blank.lines.skip = TRUE,skip=1,col.names=colnames)
+cu[,5] <- cu[,3]/sum(cu[,3])
+cu <- cu[,c(2,5,3)]
+
+# step 2: pick a random value 
+codon <- as.character(sample(cu[,1],1))
+
+# step 3: compare processed matrix with raw file using unix 
+this <- cu[cu[,1]==codon,3]
+[1] 718892
+
+command <- paste("grep", codon, h_sapiens$file, "| tr -s ' ' | cut -d ' ' -f3", sep=" ")
+that <- as.numeric(system(command, intern=TRUE))
+
+> this == that
+[1] TRUE
+=== resampling ===
+
+now we can use "sample" to get samples of these, to do statistics
+
+=== June 3 and 4 ===
+
+I finally finished a systematic set of calculations.  Using EX and U as replacement costs, and codon usage for 13 different organisms plus uniform codon usage.  
+
+I started by taking the procedures that I worked out above, and turning them into functions in titv_ratio_functions.R.  I made a number of changes while going through the process.    
+
+As a test, I created a codon usage table and an amino acid replacement matrix using all 1s.  Then I carried out the calculation with uniform codon usage and uniform weights.  The result was as expected, equal to the 116:276 ratio of codon pathways.  
+
+I didn't automate this at the top level, I just ran through the procedure repetitively about 30 times. 
+
+aa_matrix <- uniform_aa
+cu_species <- fruitfly
+out <- titv_ratio_by_codon_paths( cu_species, aa_matrix, FALSE, paths)
+result <- rbind(result,c(cu_species$name, aa_matrix$name, out))
+
+There were 2 variations on this.  One variation was to use the rescale=TRUE option in the case of Grantham and Miyata.  These are distance matrices rather than similarity matrices, so it is useful to place the values on an inverted scale.  
+
+aa_matrix <- grantham
+out <- titv_ratio_by_codon_paths( cu_species, aa_matrix, TRUE, paths)
+result <- rbind(result,c(cu_species$name, paste(aa_matrix$name,"Sims"), out))
+
+The other variation was that I temporarily modified the function to use exp(cost) instead of cost, because exp(EXS) scales linearly with probability of fixation. 
+
+aa_matrix <- grantham
+[edit function to use exp()]
+out <- titv_ratio_by_codon_paths( cu_species, aa_matrix, FALSE, paths)
+result <- rbind(result,c(cu_species$name, paste("Exp(",aa_matrix$name,")"), out))
+[repeat]
+[restore function]
+
+== june 25 continuing
+
+all_cus <- list( . . . )
+
+== July 1 ==
+
+would like to compute uncertainties for EX.  
+
+first step.  modify code to use an asymmetric matrix, asymmetric paths, weighting asymmetric paths.  this was pretty easy but I haven't checked it yet.  
+
+second step.  generate randomized ex using 
+
+
+
+=== converting between triangle and square ===
+
+Possibly, I need to figure out how to get rid of those NAs in the triangle matrices.  
+
+There are 2 approaches. One of them is that, whenever I invoke a value[ AA1, AA2 ], I test to see that AA1 > AA2, else substitute with value[ AA2, AA1 ]. The other approach is just to assign value[AA2, AA1] <- value[ AA1, AA2 ] so that we have a square matrix that is symmetric.  
+
+But there is another operation to consider.  This is the operation of scrambling values for purposes of computing uncertainty by resampling.  In this case, I would like to flatten the matrix so that I can use "sample" to shuffle the values.  
+
+sample(x, size, replace = FALSE, prob = NULL)
+
+Interestingly, I could use prob as a mask and then I would not have to go to the trouble of worrying about square or not square.  
+
+
+
+=== other stuff ===
+
+biostrings package with pam & blosum series: 
+
+http://svitsrv25.epfl.ch/R-doc/library/Biostrings/html/substitution_matrices.html
+
+

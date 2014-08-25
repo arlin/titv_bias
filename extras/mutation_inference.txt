@@ -1,0 +1,89 @@
+# get paths, simplify, prune out synonymous and nonsense
+paths <- compute_codon_paths()[,c('from_Aa','to_Aa','mut_Type')]
+paths <- paths[paths[,'from_Aa']!=paths[,'to_Aa'] & paths[,'to_Aa'] != '*' & paths[,'from_Aa'] != '*',]
+paths[paths[,'mut_Type']!='ti','mut_Type'] <- 'tv'
+
+paths <- cbind(apply(paths,1,function(x,y){paste(x[1],x[2],sep='')}),paths[,3])
+
+DF <- as.data.frame(paths)
+x <- do.call('paste', c(DF, sep = '\r'))
+sort_order <- order(x)
+
+# rle is going to find equivalent values in a vector
+
+# the challenge here is how to index DF in order to get the rows to align 
+# with the vector of repeats in rl$length, and the solution is to use 
+# the sort order with cumulative sum 
+
+rl <- rle(x[sort_order])
+paths <- cbind(DF[sort_order[cumsum(rl$lengths)],,drop=FALSE], count=rl$lengths)
+
+write.table( paths,"extras/reverse_translation_wts.tab", sep="\t", row.names=FALSE )
+
+This is not yet what I want.  First, I need to reformat the results so that there is a ti_weight and tv_weight for each replacement.  This way I can use the data from LF, GR, RW and IM.  I'm going to think through the whole thi. 
+
+==========
+Our focus in this project is the extent to which an evolutionary bias toward transitions among amino acid changes could be caused by selection filtering out less conservative changes.  We are trying to evaluate the hypothesis using different kinds of data on exchangeability, mutant screens, and exhaustive mutagenesis.  
+
+Our approach is to define a null hypothesis of equal effects (no excess conservatism of transitions), and then see if we can eliminate it.  The null hypothesis is based on a codon model of evolution, with no mutation bias.  The expected ratio of transitions to transversions among replacements is R = 0.42.  
+
+When we have an exchangeability measure such as EX or U, it is very clear how to use it to test the hypothesis.  We use it to assign weights to each path in the codon model, and see if this raises the ratio or not.   
+
+Classic mutagenesis experiments are a completely different type of data, and we can use them in a different way.  Because these experiments typically don't sample very deeply, they are, in effect, executing a gene-specific codon-based model of evolution.  
+
+The new high-throughput experiments are more difficult to apply.  Many of these studies present the results by amino acid, rather than by codon.  There might be two changes from Met168 to Ile, one transition and one transversion, or just one, or some other combination, but the experimenters don't care about that, they just care about protein effects, so they combine the efficacy measurements for all Met-->Ile changes at site 168.  This means we can't simply count up transitions and transversions, because we don't know what the mutations are.  We have to infer them, and in some cases a replacement could take place by either a transition or a transversion.  
+
+Another challenge is that some of these experiments completely randomize a codon to give all 64 possibilities.  That creates a problem because some amino acid changes are inherently less likely to occur by mutation and fixation than others, due to the structure of the genetic code.  For instance, a Cys codon (TGY) has 2 ways to change into Ser (TCY, AGY) but only one way to change to Trp (TGG).  Another way of saying this is that different replacements have different path densities in the genetic code.  If we don't take this into account, we might get the wrong answer.  
+
+So, we have to be careful about how to apply results from the studies that aggregate data.  
+
+For instance, let us imagine analyzing the data as follows.  There are 75 pairs of amino acids that can be exchanged via a single nucleotide, and 71 of them (all but 4 ambiguous pairs) can only occur by a transition, or by a transversion.  We could simply use these assignments to classify each replacement as a transition, a transversion, or undetermined, and then compare the average effect for transitions and transversions.  The problem with doing things this way is that it doesn't give us the right weights.  
+
+Another way to do it would be to take the data from each experiment, turn it into a measure of pairwise exchangeability, and then use that in the codon-based model, just as we did for EX and U.  That clearly would be a valid approach, but it doesn't make very good use of the data.  
+
+What we would like to do instead is to assign each replacement probabilistically according to the expectation fo a codon-based model.  
+
+We are given data on a set of replacements from one amino acid to another, without nucleotides, like this: 
+
+1	F75L	0.2
+2	L155M	0.9
+3	A216C	0.7
+4	A216P	0.3
+5	L288S	0.1
+6	M302I	0.4
+
+We are only interested in singlet replacements, so we toss out #3.  
+
+We are not given the nucleotide sequences, so we don't actually know whether the others are singlets.  For instance, A216P could be GCT-->CCC, which is a doublet replacement.
+
+But we want to use this result, because regardless of what really happened, it tells about the effect of a possible singlet change, GCN-->CCN, which is a transversion.  We don't foresee any danger in doing this, because we are asking a question about protein-level effects.  So, when we use these data to assess the conservativeness of transitions and transversions (among singlet replacements), A216P will count as a transversion.  
+
+F75L is a more difficult case.  TTY-->CTY is a transition, but TTY-->TTR is a transversion.  There are 4 pairs like this: LF, GR, RW and IM can be interchanged by either a transition or a transversion, depending on the starting and ending codons.  M-->I can be a transition (ATG-->ATA) or a transversion (ATG-->ATY).  I-->M is a transition if the starting codon was ATA, but a transversion if the starting codon was ATY.  
+
+We don't know the starting codon, but if codon usage is uniform, then I-->M is twice as likely to be a transversion as a transition.  If mutations are unbiased, then M-->I is twice as likely to be a transversion.  So, we will want to assign weights to M302I like this: 
+
+#   mutant  sco   ti_wt  tv_wt
+--|------|------|------|-------
+1  F75L    0.2   fl_ti   fl_tv
+2  L155M   0.9     0     lm_tv
+4  A216P   0.3     0     ap_tv
+5  L288S   0.1   ls_ti     0
+6  M302I   0.4   mi_ti   mi_tv
+
+The one thing that is obvious here is that mi_tv is twice mi_ti.  Codon use doesn't come into play because there is only 1 type of M codon, and it has 1 ti path to I and one tv path. 
+
+What about L288S?  In this case, it is only a singlet change if the Leu codon is in the TTR block, TTR-->TCR.  Only 2 out of 6 Leu codons are TTR, the other 4 are CTN.  If this were a codon-based model or a random mutagenesis, we wouldn't see L-->S at a Leu site as often as we see A-->P at an Ala site, because every Ala codon can change to Pro, but only 1/3 of Leu codons can change to Ser.  So, we want ls_tv to be 1/3 of ap_ti.  
+
+In saturation mutagenesis, every site gets changed in every way.  But in a codon-based model, the chance of a replacement is not exactly the same. It is actually lower for Leu than for Phe, because a higher fraction of Leu mutations are synonymous or nonsense, whereas a Phe codon has 8 non-synonymous changes and one synonymous.  
+
+So, the weights should compensate for that in cases of saturation.  This means that the weights need to use the numbers of non-synoymous paths relative to all mutations.  
+
+Finally, lack of knowledge of the starting codon is a problem. In the actual mutagenesis experiment, the wild-type parental gene has x Leu sites and y Phe sites.  Each has a single specific codon, x Leu codon instances and y Phe codon instances.  In a codon model, the singlet paths are based on these starting codons. 
+
+But without knowing the starting codon, there are 10 different paths from Leu to other amino acids, but only 6 different paths for Phe.  If a site is completely randomized, we will infer mutations for 10 Leu replacements, but only for 6 Phe replacements.  This high number of possible singlets isn't because Leu codons are more connected individually, but because there are more types of Leu codons.  A specific Phe (TTY) codon always has 6 replacements, and a Leu has 5 (TTA, CTR) or 6 (TTG, CTY) replacements, 5.5 on average.  Leu is more connected than Phe, but a Leu codon is less connected than a Phe codon.   
+
+What this means is that, when weights for an inferred ti or tv mutation are assigned to the total set of 10 possible singlet replacements at a Leu site, and 6 possible replacements at a Phe site, the sum of weights for the Leu site should be 5.5/6 that of the Phe site. 
+
+What I need to check is whether the path density has these properties.  The path density D(from, to, mut_type) can be defined as the number of paths of a given type of mutation from one amino acid to another.  For instance, I mentioned above that Cys to Ser has a path density of 2, but Cys to Trp has a path density of 1.  
+
+My conclusion from all of this, however, is that I should not even attempt to do this.  Its just too complicated and has too many potential pitfalls.  

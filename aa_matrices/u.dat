@@ -1,0 +1,22 @@
+NA																		
+NA	NA																	
+0.657	NA	1.015																
+NA	0.382	NA	NA															
+NA	1.045	NA	NA	NA														
+0.906	NA	NA	2.033	NA	1.634													
+1.379	0.534	NA	0.548	0.414	NA	0.553												
+NA	1.317	1.382	0.56	NA	1.351	NA	NA											
+NA	0.49	0.321	NA	NA	NA	NA	NA	NA										
+NA	0.414	NA	NA	NA	0.805	NA	NA	0.56	1.726									
+NA	1.583	1.075	NA	NA	1.466	0.548	NA	NA	0.688	NA								
+NA	0.47	NA	NA	NA	NA	NA	NA	NA	0.827	1.601	0.559							
+NA	NA	NA	NA	0.321	NA	NA	NA	NA	0.545	0.732	NA	NA						
+1.288	0.559	NA	NA	NA	1.377	NA	NA	0.784	NA	0.388	NA	NA	NA					
+2.38	0.85	2.053	NA	0.852	NA	NA	1.36	NA	0.54	0.725	NA	NA	0.365	1.039				
+1.587	0.827	1.695	NA	NA	NA	NA	NA	NA	0.75	NA	0.989	1.007	NA	1.001	2.49			
+NA	0.263	NA	NA	0.271	NA	NA	0.242	NA	NA	0.793	NA	NA	NA	NA	0.375	NA		
+NA	NA	0.378	0.241	0.268	NA	NA	NA	0.665	NA	NA	NA	NA	1.649	NA	0.503	NA	NA	
+1.017	NA	NA	0.361	NA	NA	0.506	0.539	NA	2.415	1.329	NA	0.986	0.548	NA	NA	NA	NA	NA
+Ala	Arg	Asn	Asp	Cys	Gln	Glu	Gly	His	Ile	Leu	Lys	Met	Phe	Pro	Ser	Thr	Trp	Tyr
+
+# U matrix of Tang, et al., 2004.  Data from Table 2.  Missing values for doublets & triplets are given as "NA"																		
