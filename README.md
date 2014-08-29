@@ -47,7 +47,7 @@ The DFE_tests subdirectory also has a spreadsheet ("DFE_results_formatted_table.
 
 Adding a study is simple (once you have processed the data from sources provided by the authors of the study, which can be difficult).   First, add a stanza to DFE_data.R that includes the data.  Then you need to edit "run_DFE_tests.R" in two places.  Adding your study to this line: 
  
-> all_dfes <- list( firnberg, starita, roscoe, . . .  
+> all_dfes <- list( firnberg, roscoe, . . .  
 
 will ensure that a Mann-Whitney U test is performed.  But if you want to group this study with other studies in a meta-analysis, you need to look toward the end of the "run_DFE_tests.R" file and also add the new study to one of the groups mentioned there. 
 
@@ -69,6 +69,15 @@ To add a different codon usage is similar.  First, add the file in CUTG database
 > all_cus <- list(uniform_cu, lambda, hiv1, e_coli, . . . 
 
 so that it includes the new species.  The "run_titv_ratio_calculations.R" automatically iterates over every species included in all_cus. 
+
+Correlation of EX and U
+-----------------------
+
+> source("aa_wt_matrix_functions.R")
+> exs_mat <- flattened_aa_matrix(exs)
+> u_mat <- flattened_aa_matrix(tangs_u)
+> both <- merge(exs_mat, u_mat, by.x="row.names",by.y="row.names")
+> cor(both[,2:3])
 
 Adapting or extending this code for other calculations
 ------------------------------------------------------
