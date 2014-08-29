@@ -73,11 +73,9 @@ so that it includes the new species.  The "run_titv_ratio_calculations.R" automa
 Correlation of EX and U
 -----------------------
 
-> source("aa_wt_matrix_functions.R")
-> exs_mat <- flattened_aa_matrix(exs)
-> u_mat <- flattened_aa_matrix(tangs_u)
-> both <- merge(exs_mat, u_mat, by.x="row.names",by.y="row.names")
-> cor(both[,2:3])
+Source the "aa_wt_matrix_functions.R" file and this code will give you the correlation coefficient cited in the manuscript: 
+
+> cor(merge(flattened_aa_matrix(exs), flattened_aa_matrix(tangs_u), by.x="row.names",by.y="row.names")[,2:3])
 
 Adapting or extending this code for other calculations
 ------------------------------------------------------
